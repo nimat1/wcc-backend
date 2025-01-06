@@ -1,6 +1,10 @@
 package com.wcc.platform.controller;
 
+import static com.wcc.platform.domain.cms.PageType.ABOUT_US;
 import static com.wcc.platform.domain.cms.PageType.CODE_OF_CONDUCT;
+import static com.wcc.platform.factories.SetupFactories.DEFAULT_CURRENT_PAGE;
+import static com.wcc.platform.factories.SetupFactories.DEFAULT_PAGE_SIZE;
+import static com.wcc.platform.factories.SetupFactories.createAboutUsPageTest;
 import static com.wcc.platform.factories.SetupFactories.createCodeOfConductPageTest;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.when;
@@ -16,6 +20,8 @@ import com.wcc.platform.domain.cms.attributes.Image;
 import com.wcc.platform.domain.cms.attributes.ImageType;
 import com.wcc.platform.domain.cms.pages.CollaboratorPage;
 import com.wcc.platform.domain.cms.pages.Page;
+import com.wcc.platform.domain.cms.pages.PageMetadata;
+import com.wcc.platform.domain.cms.pages.Pagination;
 import com.wcc.platform.domain.exceptions.ContentNotFoundException;
 import com.wcc.platform.domain.exceptions.PlatformInternalException;
 import com.wcc.platform.domain.platform.Member;
@@ -35,6 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class AboutControllerTest {
 
   private static final String API_CODE_OF_CONDUCT = "/api/cms/v1/code-of-conduct";
+  private static final String API_ABOUT_US = "/api/cms/v1/about";
 
   @Autowired private MockMvc mockMvc;
   @MockBean private CmsService service;
@@ -66,7 +73,8 @@ class AboutControllerTest {
 
   @Test
   void testCollaboratorNotFound() throws Exception {
-    when(service.getCollaborator()).thenThrow(new ContentNotFoundException("Not Found Exception"));
+    when(service.getCollaborator(DEFAULT_CURRENT_PAGE, DEFAULT_PAGE_SIZE))
+        .thenThrow(new ContentNotFoundException("Not Found Exception"));
 
     mockMvc
         .perform(get("/api/cms/v1/collaborators").contentType(APPLICATION_JSON))
@@ -79,7 +87,7 @@ class AboutControllerTest {
   @Test
   void testCollaboratorInternalError() throws Exception {
     var internalError = new PlatformInternalException("internal Json", new RuntimeException());
-    when(service.getCollaborator()).thenThrow(internalError);
+    when(service.getCollaborator(DEFAULT_CURRENT_PAGE, DEFAULT_PAGE_SIZE)).thenThrow(internalError);
 
     mockMvc
         .perform(get("/api/cms/v1/collaborators").contentType(APPLICATION_JSON))
@@ -107,6 +115,7 @@ class AboutControllerTest {
 
     var collaboratorPage =
         new CollaboratorPage(
+            new PageMetadata(new Pagination(1, 1, 1, 10)),
             Page.builder()
                 .title("collaborator_title")
                 .subtitle("collaborator_subtitle")
@@ -114,10 +123,12 @@ class AboutControllerTest {
                 .build(),
             new Contact(
                 "contact_title",
+                null,
                 List.of(new SocialNetwork(SocialNetworkType.LINKEDIN, "page_link"))),
             List.of(collaborator));
 
-    when(service.getCollaborator()).thenReturn(collaboratorPage);
+    when(service.getCollaborator(DEFAULT_CURRENT_PAGE, DEFAULT_PAGE_SIZE))
+        .thenReturn(collaboratorPage);
 
     mockMvc
         .perform(get("/api/cms/v1/collaborators").contentType(APPLICATION_JSON))
@@ -126,7 +137,7 @@ class AboutControllerTest {
         .andExpect(jsonPath("$.page.subtitle", is("collaborator_subtitle")))
         .andExpect(jsonPath("$.page.description", is("collaborator_desc")))
         .andExpect(jsonPath("$.contact.title", is("contact_title")))
-        .andExpect(jsonPath("$.contact.links[0].type", is("LINKEDIN")))
+        .andExpect(jsonPath("$.contact.links[0].type", is("linkedin")))
         .andExpect(jsonPath("$.contact.links[0].link", is("page_link")))
         .andExpect(jsonPath("$.collaborators[0].fullName", is("FullName")))
         .andExpect(jsonPath("$.collaborators[0].position", is("Position")))
@@ -139,8 +150,8 @@ class AboutControllerTest {
         .andExpect(jsonPath("$.collaborators[0].memberTypes[0]", is("COLLABORATOR")))
         .andExpect(jsonPath("$.collaborators[0].images[0].path", is("image.png")))
         .andExpect(jsonPath("$.collaborators[0].images[0].alt", is("alt image")))
-        .andExpect(jsonPath("$.collaborators[0].images[0].type", is("DESKTOP")))
-        .andExpect(jsonPath("$.collaborators[0].network[0].type", is("LINKEDIN")))
+        .andExpect(jsonPath("$.collaborators[0].images[0].type", is("desktop")))
+        .andExpect(jsonPath("$.collaborators[0].network[0].type", is("linkedin")))
         .andExpect(jsonPath("$.collaborators[0].network[0].link", is("collaborator_link")));
   }
 
@@ -179,6 +190,44 @@ class AboutControllerTest {
 
     mockMvc
         .perform(get(API_CODE_OF_CONDUCT).contentType(APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(content().json(expectedJson));
+  }
+
+  @Test
+  void testAboutUsNotFound() throws Exception {
+    when(service.getAboutUs()).thenThrow(new ContentNotFoundException("Not Found Exception"));
+
+    mockMvc
+        .perform(get(API_ABOUT_US).contentType(APPLICATION_JSON))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.status", is(404)))
+        .andExpect(jsonPath("$.message", is("Not Found Exception")))
+        .andExpect(jsonPath("$.details", is("uri=/api/cms/v1/about")));
+  }
+
+  @Test
+  void testAboutUsInternalError() throws Exception {
+    var internalError = new PlatformInternalException("internal Json", new RuntimeException());
+    when(service.getAboutUs()).thenThrow(internalError);
+
+    mockMvc
+        .perform(get(API_ABOUT_US).contentType(APPLICATION_JSON))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.status", is(500)))
+        .andExpect(jsonPath("$.message", is("internal Json")))
+        .andExpect(jsonPath("$.details", is("uri=/api/cms/v1/about")));
+  }
+
+  @Test
+  void testAboutUsOkResponse() throws Exception {
+    var fileName = ABOUT_US.getFileName();
+    var expectedJson = FileUtil.readFileAsString(fileName);
+
+    when(service.getAboutUs()).thenReturn(createAboutUsPageTest(fileName));
+
+    mockMvc
+        .perform(get(API_ABOUT_US).contentType(APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(content().json(expectedJson));
   }

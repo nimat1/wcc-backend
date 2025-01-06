@@ -1,9 +1,14 @@
 package com.wcc.platform.factories;
 
+import static com.wcc.platform.domain.platform.SocialNetworkType.TWITTER;
+import static com.wcc.platform.domain.platform.SocialNetworkType.YOUTUBE;
+import static com.wcc.platform.factories.SetUpStyleFactories.backgroundSecondary;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wcc.platform.configuration.ObjectMapperConfig;
+import com.wcc.platform.domain.cms.PageType;
 import com.wcc.platform.domain.cms.attributes.Contact;
 import com.wcc.platform.domain.cms.attributes.Country;
 import com.wcc.platform.domain.cms.attributes.HeroSection;
@@ -11,12 +16,14 @@ import com.wcc.platform.domain.cms.attributes.Image;
 import com.wcc.platform.domain.cms.attributes.ImageType;
 import com.wcc.platform.domain.cms.attributes.LabelLink;
 import com.wcc.platform.domain.cms.attributes.MemberByType;
-import com.wcc.platform.domain.cms.attributes.Network;
 import com.wcc.platform.domain.cms.attributes.PageSection;
+import com.wcc.platform.domain.cms.pages.AboutUsPage;
 import com.wcc.platform.domain.cms.pages.CodeOfConductPage;
 import com.wcc.platform.domain.cms.pages.CollaboratorPage;
 import com.wcc.platform.domain.cms.pages.FooterPage;
 import com.wcc.platform.domain.cms.pages.Page;
+import com.wcc.platform.domain.cms.pages.PageMetadata;
+import com.wcc.platform.domain.cms.pages.Pagination;
 import com.wcc.platform.domain.cms.pages.Section;
 import com.wcc.platform.domain.cms.pages.TeamPage;
 import com.wcc.platform.domain.platform.LeadershipMember;
@@ -32,15 +39,22 @@ import java.util.List;
 /** Setup Factory tests. */
 public class SetupFactories {
 
+  public static final int DEFAULT_CURRENT_PAGE = 1;
+  public static final int DEFAULT_PAGE_SIZE = 10;
+
   public static final ObjectMapper OBJECT_MAPPER = new ObjectMapperConfig().objectMapper();
 
+  /** Factory test. */
   public static Contact createContactTest() {
     return new Contact(
-        "Contact Us", List.of(new SocialNetwork(SocialNetworkType.EMAIL, "test@test.com")));
+        "Contact Us",
+        "Contact description",
+        List.of(new SocialNetwork(SocialNetworkType.EMAIL, "test@test.com")));
   }
 
   public static TeamPage createTeamPageTest() {
-    return new TeamPage(createPageTest(), createContactTest(), createMemberByTypeTest());
+    final String pageId = PageType.TEAM.getPageId();
+    return new TeamPage(pageId, createPageTest(), createContactTest(), createMemberByTypeTest());
   }
 
   /** Factory test. */
@@ -56,7 +70,10 @@ public class SetupFactories {
   /** Factory test. */
   public static CollaboratorPage createCollaboratorPageTest() {
     return new CollaboratorPage(
-        createPageTest(), createContactTest(), List.of(createCollaboratorsTest()));
+        createPaginationTest(),
+        createPageTest(),
+        createContactTest(),
+        List.of(createCollaboratorsTest()));
   }
 
   /** Factory test. */
@@ -93,6 +110,10 @@ public class SetupFactories {
 
   public static Member createCollaboratorsTest() {
     return createCollaboratorMemberTest(MemberType.MEMBER);
+  }
+
+  private static PageMetadata createPaginationTest() {
+    return new PageMetadata(new Pagination(1, 1, DEFAULT_CURRENT_PAGE, DEFAULT_PAGE_SIZE));
   }
 
   /** Factory test for page. */
@@ -212,11 +233,11 @@ public class SetupFactories {
   /** Factory test. */
   public static FooterPage createFooterPageTest() {
     return new FooterPage(
-        "id",
+        PageType.FOOTER.getPageId(),
         "footer_title",
         "footer_subtitle",
         "footer_description",
-        createNetworksTest(),
+        createSocialNetworksTest(),
         createLinkTest());
   }
 
@@ -230,8 +251,9 @@ public class SetupFactories {
     }
   }
 
-  public static List<Network> createNetworksTest() {
-    return List.of(new Network("type1", "link1"), new Network("type2", "link2"));
+  public static List<SocialNetwork> createSocialNetworksTest() {
+    return List.of(
+        new SocialNetwork(YOUTUBE, "youtube.com"), new SocialNetwork(TWITTER, "twitter.com"));
   }
 
   public static LabelLink createLinkTest() {
@@ -258,6 +280,23 @@ public class SetupFactories {
 
   /** Factory test for hero section. */
   public static HeroSection createHeroSectionTest() {
-    return new HeroSection("title", "hero description", createImageTest());
+    return new HeroSection("title", "hero description", createImageTest(), backgroundSecondary());
+  }
+
+  /** About Us factory for testing. */
+  public static AboutUsPage createAboutUsPageTest() {
+    final String pageId = PageType.ABOUT_US.getPageId();
+    return new AboutUsPage(
+        pageId, createPageTest(), List.of(createSectionTest()), createContactTest());
+  }
+
+  /** About Us factory for testing. */
+  public static AboutUsPage createAboutUsPageTest(final String fileName) {
+    try {
+      final String content = FileUtil.readFileAsString(fileName);
+      return OBJECT_MAPPER.readValue(content, AboutUsPage.class);
+    } catch (JsonProcessingException e) {
+      return createAboutUsPageTest();
+    }
   }
 }
